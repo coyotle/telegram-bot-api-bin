@@ -1,0 +1,62 @@
+name: Release Telegram Bot API
+
+on:
+  schedule:
+    - cron: "0 0 * * *" # Ежедневная проверка
+  workflow_dispatch: # Ручной запуск
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Get latest Bot API version
+        id: get_version
+        run: |
+          TGVER=$(curl --silent https://core.telegram.org/bots/api-changelog | grep -P -o -i '(?<=Bot API )\d+\.\d+' | head -1 | tr -d '\n')
+          echo "Latest Bot API version: $TGVER"
+          echo "TGVER=$TGVER" >> $GITHUB_ENV
+          echo "RELEASE_TAG=v$TGVER" >> $GITHUB_ENV
+
+      - name: Check if release exists
+        id: check_release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            try {
+              const { data: release } = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: `v${process.env.TGVER}`
+              });
+              return true;
+            } catch (error) {
+              if (error.status === 404) return false;
+              throw error;
+            }
+
+      - name: Build Telegram Bot API
+        if: steps.check_release.outputs.result == 'false'
+        run: |
+          echo "Building Telegram Bot API v$TGVER..."
+          sudo apt-get update
+          sudo apt-get install -y git make g++ cmake zlib1g-dev libssl-dev gperf
+          git clone --recursive https://github.com/tdlib/telegram-bot-api.git
+          cd telegram-bot-api
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -- -j$(nproc)
+          mkdir -p "../release-artifacts"
+          cp build/telegram-bot-api "../release-artifacts/"
+
+      - name: Create GitHub Release
+        if: steps.check_release.outputs.result == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          token: ${{ secrets.RELEASE_TOKEN }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: "${{ env.RELEASE_TAG }}"
+          body: "Auto-built binary for Telegram Bot API ${{ env.TGVER }}"
+          files: |
+            release-artifacts/telegram-bot-api
