@@ -20,15 +20,10 @@ chmod +x telegram-bot-api
 ### Run the Server
 
 ```bash
-./telegram-bot-api --local --http-port=8081 --verbosity=1
+./telegram-bot-api --api-id=YOUR_API_ID --api-hash=YOUR_API_HASH --local -l /var/logs/tgserver.log -v 3
 ```
 
 ### Verify It Works
-
-```bash
-curl http://localhost:8081/api/v1/health
-# Expected response: {"ok":true}
-```
 
 ## 🔄 Versioning
 
